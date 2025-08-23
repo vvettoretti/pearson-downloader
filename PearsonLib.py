@@ -48,21 +48,6 @@ class CryptoUtils:
 
 class FileProcessor:
     @staticmethod
-    def decrypt_bin_files_in_folder(folder_path: Path, aes_key: bytes, remove_bin: bool = True) -> None:
-        for path in folder_path.rglob("*.bin"):
-            try:
-                data = path.read_bytes()
-                decrypted = CryptoUtils.decrypt_aes_data(data, aes_key)
-                
-                new_path = path.with_suffix('')
-                new_path.write_bytes(decrypted)
-                
-                if remove_bin:
-                    path.unlink()
-            except Exception as e:
-                print(f"Failed to decrypt {path}: {e}")
-
-    @staticmethod
     def epub_to_pdf(epub_file: Path, output_pdf: Path, margin="1cm", scale=0.7):
         pdf = fitz.Document()
         toc, labels, pages = [], [], []
@@ -108,26 +93,32 @@ class FileProcessor:
                         toc.append([1, title.strip(), pages.index(href) + 1])
             else:
                 # Parse NAV (EPUB 3)
-                nav_tree = et.parse(nav_path).getroot()
-                toc_nav = next(
-                    i for i in nav_tree.find("{*}body").findall("{*}nav")
-                    if i.get("{http://www.idpf.org/2007/ops}type") == "toc"
-                )
+                try:
+                    nav_tree = et.parse(nav_path).getroot()
+                    toc_navs = [i for i in nav_tree.find("{*}body").findall("{*}nav")
+                               if i.get("{http://www.idpf.org/2007/ops}type") == "toc"]
+                    
+                    if toc_navs:
+                        toc_nav = toc_navs[0]
+                        
+                        def parse_nav(ol, level=1):
+                            for li in ol.findall("{*}li"):
+                                a = li.find("{*}a")
+                                if a is None:
+                                    continue
+                                href = (nav_path.parent / a.get("href").split("#")[0]).resolve()
+                                title = (a.text or "").strip()
+                                if href in pages:
+                                    toc.append([level, title, pages.index(href) + 1])
+                                sub = li.find("{*}ol")
+                                if sub is not None:
+                                    parse_nav(sub, level + 1)
 
-                def parse_nav(ol, level=1):
-                    for li in ol.findall("{*}li"):
-                        a = li.find("{*}a")
-                        if a is None:
-                            continue
-                        href = (nav_path.parent / a.get("href").split("#")[0]).resolve()
-                        title = (a.text or "").strip()
-                        if href in pages:
-                            toc.append([level, title, pages.index(href) + 1])
-                        sub = li.find("{*}ol")
-                        if sub is not None:
-                            parse_nav(sub, level + 1)
-
-                parse_nav(toc_nav.find("{*}ol"))
+                        ol = toc_nav.find("{*}ol")
+                        if ol is not None:
+                            parse_nav(ol)
+                except Exception:
+                    pass  # Skip TOC parsing if it fails
 
             # Render pages with Playwright
             with sync_playwright() as p:
@@ -162,6 +153,7 @@ class Pearson:
     def _generate_device_id(self) -> str:
         return ''.join(random.choice(string.ascii_letters + string.digits) 
                       for _ in range(DEVICE_ID_LENGTH))
+
 
     def _get_user_agent(self) -> str:
         device_info = {
@@ -296,14 +288,30 @@ class Pearson:
             with zipfile.ZipFile(file_path, 'r') as zf:
                 zf.extractall(extract_folder)
             
-            FileProcessor.decrypt_bin_files_in_folder(extract_folder, aes_key)
+            # Decrypt .bin files AND keep all other files
+            for path in extract_folder.rglob("*"):
+                if path.is_file() and path.suffix == '.bin':
+                    try:
+                        data = path.read_bytes()
+                        decrypted = CryptoUtils.decrypt_aes_data(data, aes_key)
+                        
+                        new_path = path.with_suffix('')
+                        new_path.write_bytes(decrypted)
+                        path.unlink()  # Remove the .bin file
+                    except Exception as e:
+                        print(f"Failed to decrypt {path}: {e}")
             
             if convert_to_pdf:
                 # Create EPUB first
                 epub_path = file_path.with_suffix(".epub")
-                shutil.make_archive(str(extract_folder), 'zip', root_dir=extract_folder)
-                zip_path = Path(str(extract_folder) + ".zip")
-                zip_path.rename(epub_path)
+                
+                # Create EPUB using zipfile instead of shutil.make_archive
+                with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as epub_zip:
+                    for file_path_in_folder in extract_folder.rglob('*'):
+                        if file_path_in_folder.is_file():
+                            # Get relative path from extract_folder
+                            arcname = file_path_in_folder.relative_to(extract_folder)
+                            epub_zip.write(file_path_in_folder, arcname)
                 
                 # Convert to PDF
                 pdf_path = file_path.with_suffix(".pdf")
@@ -316,9 +324,14 @@ class Pearson:
                 return pdf_path
             else:
                 epub_path = file_path.with_suffix(".epub")
-                shutil.make_archive(str(extract_folder), 'zip', root_dir=extract_folder)
-                zip_path = Path(str(extract_folder) + ".zip")
-                zip_path.rename(epub_path)
+                
+                # Create EPUB using zipfile for consistent behavior
+                with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as epub_zip:
+                    for file_path_in_folder in extract_folder.rglob('*'):
+                        if file_path_in_folder.is_file():
+                            # Get relative path from extract_folder
+                            arcname = file_path_in_folder.relative_to(extract_folder)
+                            epub_zip.write(file_path_in_folder, arcname)
                 
                 shutil.rmtree(extract_folder)
                 file_path.unlink(missing_ok=True)
