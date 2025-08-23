@@ -45,8 +45,10 @@ try:
             filename = book_title
         
         # Remove .pdf if user added it since we always save as PDF
-        if filename.endswith('.pdf'):
-            filename = filename[:-4]
+        if not filename.endswith('.pdf'):
+            filename = filename+".pdf"
+
+      
 
         try:
             print("📚 Downloading...")

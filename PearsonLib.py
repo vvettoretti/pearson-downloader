@@ -20,7 +20,6 @@ from tqdm import tqdm
 
 
 CLIENT_ID = "t1txmB9oRay3yK5aIQxsS28Z9T19xMLM"
-DEVICE_ID_LENGTH = 16
 DOWNLOADS_DIR = "pearson_downloads"
 
 class PearsonError(Exception):
@@ -152,7 +151,7 @@ class Pearson:
 
     def _generate_device_id(self) -> str:
         return ''.join(random.choice(string.ascii_letters + string.digits) 
-                      for _ in range(DEVICE_ID_LENGTH))
+                      for _ in range(16))
 
 
     def _get_user_agent(self) -> str:
