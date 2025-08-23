@@ -1,40 +1,66 @@
-from PearsonLib import Pearson
+from PearsonLib import Pearson, PearsonError
 
 print("Pearson downloader by @vvettoretti")
 
+try:
+    username = input("Username: ")
+    password = input("Password: ")
+    pearson = Pearson(username=username, password=password)
+    
+    if not pearson.login():
+        print("Login failed.")
+        exit(1)
 
-username = input("Username: ")
-password = input("Password: ")
-pearson = Pearson(username=username, password=password)
-if not pearson.login():
-    print("Login failed.")
-
-
-# Get and display the list of books
-books = pearson.get_bookshelf()
-if not books:
-    print("No books available.")
-else:
+    books = pearson.get_bookshelf()
+    if not books:
+        print("No books available.")
+        exit(1)
+        
     print("Available books:")
     for idx, book in enumerate(books):
         print(f"[{idx}] {book['book_title']}")
 
-    # Prompt user to choose a book
-    while (book_choice := input("Choose a book (enter the corresponding number), or enter e to exit:")) != "e":
-        book_choice = int(book_choice)
-        if book_choice < 0 or book_choice >= len(books):
-            print("Invalid choice.")
+    while True:
+        book_choice = input("Choose a book (number) or 'e' to exit: ")
+        if book_choice.lower() == 'e':
+            break
+            
+        try:
+            book_choice = int(book_choice)
+            if book_choice < 0 or book_choice >= len(books):
+                print("Invalid choice.")
+                continue
+        except ValueError:
+            print("Enter a valid number or 'e'.")
+            continue
 
-        else:
-            chosen_book = books[book_choice]
-            book_id = chosen_book.get("book_id")
-            book_title = chosen_book.get("book_title")
+        chosen_book = books[book_choice]
+        book_id = chosen_book.get("book_id")
+        product_id = chosen_book.get("product_id")
+        entitlement_source = chosen_book.get("entitlement_source", "PASSPORT")
+        book_title = chosen_book.get("book_title")
 
-            # Get user input for filename
-            filename = input(f"Enter a filename for '{book_title}.pdf' (leave empty to use default): ")
-            if not filename:
-                filename = f"{book_title}.pdf"
+        filename = input(f"Filename for '{book_title}' (empty for default): ").strip()
+        if not filename:
+            filename = book_title
+        
+        # Remove .pdf if user added it since we always save as PDF
+        if filename.endswith('.pdf'):
+            filename = filename[:-4]
 
-            # Download the chosen book
-            pearson.download_book(book_id, filename,show_progress=True)
-            print("Book downloaded successfully!")
+        try:
+            print("📚 Downloading...")
+            saved_file = pearson.download_book(book_id, product_id, entitlement_source, filename, show_progress=True)
+            print(f"✅ Saved: {saved_file}")
+            
+        except PearsonError as e:
+            print(f"❌ Failed: {e}")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            
+except KeyboardInterrupt:
+    print("\nCancelled.")
+except PearsonError as e:
+    print(f"❌ Error: {e}")
+except Exception as e:
+    print(f"❌ Error: {e}")

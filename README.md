@@ -1,21 +1,60 @@
-# pearson-downloader
-Download books from Pearson EText and save them as PDF's 💫
+# Pearson Downloader 📚
 
-## Usage
+Download books from Pearson eText and convert them to PDF format automatically.
+
+## Features
+
+- Automatically converts EPUB to PDF with proper formatting
+- Progress bar for downloads
+- Clean, organized downloads folder
+
+## Installation
+
+### Quick Setup (Recommended)
 
 1. Clone the repository:
+
    ```bash
-   git clone https://github.com/your-username/pearson-downloader.git
+   git clone https://github.com/vvettoretti/pearson-downloader.git
    cd pearson-downloader
+   ```
+
+2. Run the setup script:
+
+   ```bash
+   chmod +x setup.sh
+   ./setup.sh
+   ```
+
+### Manual Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/vvettoretti/pearson-downloader.git
+   cd pearson-downloader
+   ```
+
 2. Install required packages:
+
    ```bash
    pip install -r requirements.txt
    ```
-3. Run the script:
+
+3. Install Playwright browsers (for PDF conversion):
    ```bash
-    python3 main.py
-    ```
-4. Follow on-screen instructions to choose a book and download.
+   playwright install chromium
+   ```
+
+## Usage
+
+1. Run the script:
+
+   ```bash
+   python3 main.py
+   ```
+
+Books are saved in the `pearson_downloads/` directory.
 
 ## Disclaimer
 

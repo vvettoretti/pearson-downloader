@@ -18,6 +18,13 @@ lib/
 lib64/
 parts/
 sdist/
+
+# Project specific
+pearson_downloads/
+*.epub
+*.pdf
+test_*
+book.pdf
 var/
 wheels/
 share/python-wheels/
