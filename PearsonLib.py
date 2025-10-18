@@ -282,64 +282,50 @@ class Pearson:
     def _process_epub_file(self, file_path: Path, aes_key: bytes, convert_to_pdf: bool = True) -> Path:
         extract_folder = file_path.parent / (file_path.stem + "_extracted")
         extract_folder.mkdir(exist_ok=True)
-        
+
         try:
             with zipfile.ZipFile(file_path, 'r') as zf:
                 zf.extractall(extract_folder)
-            
-            # Decrypt .bin files AND keep all other files
+
+            # Decrypt .bin files
             for path in extract_folder.rglob("*"):
                 if path.is_file() and path.suffix == '.bin':
                     try:
                         data = path.read_bytes()
                         decrypted = CryptoUtils.decrypt_aes_data(data, aes_key)
-                        
                         new_path = path.with_suffix('')
                         new_path.write_bytes(decrypted)
-                        path.unlink()  # Remove the .bin file
+                        path.unlink()
                     except Exception as e:
                         print(f"Failed to decrypt {path}: {e}")
-            
+
+            # Create EPUB from decrypted files
+            epub_path = file_path.with_suffix(".epub")
+            with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as epub_zip:
+                for file_path_in_folder in extract_folder.rglob('*'):
+                    if file_path_in_folder.is_file():
+                        arcname = file_path_in_folder.relative_to(extract_folder)
+                        epub_zip.write(file_path_in_folder, arcname)
+
+            # Clean up extraction folder and original encrypted file
+            shutil.rmtree(extract_folder)
+            file_path.unlink(missing_ok=True)
+
             if convert_to_pdf:
-                # Create EPUB first
-                epub_path = file_path.with_suffix(".epub")
-                
-                # Create EPUB using zipfile instead of shutil.make_archive
-                with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as epub_zip:
-                    for file_path_in_folder in extract_folder.rglob('*'):
-                        if file_path_in_folder.is_file():
-                            # Get relative path from extract_folder
-                            arcname = file_path_in_folder.relative_to(extract_folder)
-                            epub_zip.write(file_path_in_folder, arcname)
-                
-                # Convert to PDF
+                # Convert EPUB to PDF
                 pdf_path = file_path.with_suffix(".pdf")
                 FileProcessor.epub_to_pdf(epub_path, pdf_path)
-                
-                # Clean up
-                shutil.rmtree(extract_folder)
-                file_path.unlink(missing_ok=True)
-                epub_path.unlink(missing_ok=True)  # Remove the temporary EPUB
+                epub_path.unlink(missing_ok=True)
                 return pdf_path
             else:
-                epub_path = file_path.with_suffix(".epub")
-                
-                # Create EPUB using zipfile for consistent behavior
-                with zipfile.ZipFile(epub_path, 'w', zipfile.ZIP_DEFLATED) as epub_zip:
-                    for file_path_in_folder in extract_folder.rglob('*'):
-                        if file_path_in_folder.is_file():
-                            # Get relative path from extract_folder
-                            arcname = file_path_in_folder.relative_to(extract_folder)
-                            epub_zip.write(file_path_in_folder, arcname)
-                
-                shutil.rmtree(extract_folder)
-                file_path.unlink(missing_ok=True)
                 return epub_path
-            
+
         except Exception as e:
+            # Cleanup on error
             if extract_folder.exists():
                 shutil.rmtree(extract_folder)
             raise PearsonError(f"Failed to process EPUB: {e}")
+
 
     def _process_pdf_file(self, file_path: Path, encrypted_data: bytes, aes_key: bytes) -> Path:
         try:
